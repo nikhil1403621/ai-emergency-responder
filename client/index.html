@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
+  <meta name="theme-color" content="#070b14">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>AI-Based Emergency Response System | Triage & Dispatch Platform</title>
+  <meta name="description" content="Academic prototype demonstrating AI-assisted emergency incident triage, human-in-the-loop dispatch approval, simulated response units, and live WebSocket status tracking.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body class="dark-theme">
+  <!-- Top System Disclaimer Banner with Mobile Collapse -->
+  <aside id="disclaimerBanner" class="disclaimer-banner" role="alert" aria-label="Academic prototype notice">
+    <div class="disclaimer-content">
+      <span class="warning-icon" aria-hidden="true">⚠️</span>
+      <span class="disclaimer-text"><strong>ACADEMIC PROTOTYPE</strong> — Not connected to real emergency services. In a real emergency, immediately call 911 / 112 / 100.</span>
+    </div>
+    <div class="disclaimer-controls">
+      <div class="system-status-indicator">
+        <span id="wsStatusDot" class="status-dot disconnected" aria-hidden="true"></span>
+        <span id="wsStatusText">Live Feed</span>
+      </div>
+      <button id="btnDismissBanner" class="banner-close-btn" aria-label="Dismiss banner" title="Dismiss notice">&times;</button>
+    </div>
+  </aside>
+
+  <!-- Application Header -->
+  <header class="app-header">
+    <div class="header-branding">
+      <div class="logo-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="shield-icon" aria-hidden="true">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M12 8v8"/>
+          <path d="M8 12h8"/>
+        </svg>
+      </div>
+      <div class="title-wrap">
+        <h1>AI Emergency Response</h1>
+        <p class="subtitle">Autonomous Triage Engine • Dispatcher Oversight • Live MDT</p>
+      </div>
+    </div>
+
+    <!-- Role Switching Navigation Bar (Swipeable / Scrollable on Mobile) -->
+    <nav class="role-nav" aria-label="Portal views">
+      <button id="tabCitizen" class="role-tab active" data-role="citizen">
+        <span class="tab-icon">📢</span> Citizen Report
+      </button>
+      <button id="tabDispatcher" class="role-tab" data-role="dispatcher">
+        <span class="tab-icon">🛡️</span> Dispatcher <span id="queueBadge" class="badge">0</span>
+      </button>
+      <button id="tabResponder" class="role-tab" data-role="responder">
+        <span class="tab-icon">🚑</span> Responder MDT
+      </button>
+      <button id="tabRadar" class="role-tab" data-role="radar">
+        <span class="tab-icon">📡</span> Tactical Radar
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-main">
+    <!-- VIEW 1: CITIZEN REPORTING VIEW -->
+    <section id="viewCitizen" class="role-view active" aria-labelledby="headingCitizen">
+      <!-- Mobile Sub-navigation Pills -->
+      <div class="mobile-subnav citizen-mobile-nav" role="tablist">
+        <button id="subtabCitizenForm" class="subnav-btn active" type="button">📝 1. Report Incident</button>
+        <button id="subtabCitizenTicket" class="subnav-btn" type="button">🎫 2. Track Ticket</button>
+      </div>
+
+      <div class="portal-grid">
+        <!-- Report Intake Column -->
+        <article id="citizenFormCard" class="glass-card form-card">
+          <div class="card-header">
+            <h2 id="headingCitizen">Submit Emergency Report</h2>
+            <span class="info-pill">Step 1 of 2: Intake</span>
+          </div>
+
+          <!-- Quick Scenario Presets for Easy Grading / Demo -->
+          <div class="preset-section">
+            <span class="section-label">Quick Test Scenarios:</span>
+            <div class="preset-chips">
+              <button type="button" class="preset-btn" data-preset="crash">💥 Multi-Car Crash</button>
+              <button type="button" class="preset-btn" data-preset="fire">🔥 Warehouse Blaze</button>
+              <button type="button" class="preset-btn" data-preset="cardiac">❤️ Metro Cardiac</button>
+              <button type="button" class="preset-btn" data-preset="robbery">🚨 Store Robbery</button>
+            </div>
+          </div>
+
+          <form id="incidentForm" class="incident-form" novalidate>
+            <div class="form-group">
+              <label for="incidentDescription">
+                Incident Description <span class="required">*</span>
+              </label>
+              <textarea 
+                id="incidentDescription" 
+                name="description" 
+                rows="4" 
+                required 
+                minlength="10" 
+                maxlength="2000" 
+                placeholder="Describe what happened, any injuries, visible hazards, vehicles involved, or people trapped..."
+              ></textarea>
+              <div class="field-meta">
+                <span class="char-counter"><span id="charCount">0</span> / 2000 chars (min 10)</span>
+                <span id="descError" class="field-error" aria-live="polite"></span>
+              </div>
+            </div>
+
+            <!-- Location Coordinates & Landmark -->
+            <div class="form-row">
+              <div class="form-group">
+                <label for="addressHint">Location Landmark / Address</label>
+                <input type="text" id="addressHint" name="address_hint" placeholder="e.g. Central Market Square, 5th Cross" value="Central Business District">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="inputLat">Latitude</label>
+                <input type="number" id="inputLat" name="latitude" step="0.0001" min="-90" max="90" value="12.9716">
+              </div>
+              <div class="form-group">
+                <label for="inputLon">Longitude</label>
+                <input type="number" id="inputLon" name="longitude" step="0.0001" min="-180" max="180" value="77.5946">
+              </div>
+            </div>
+
+            <!-- Quick Landmark Coordinate Pickers -->
+            <div class="landmark-shortcuts">
+              <span class="section-label">Simulated Landmark Coordinates:</span>
+              <div class="landmark-buttons">
+                <button type="button" class="pin-btn" data-lat="12.9716" data-lon="77.5946" data-name="City Center">📍 City Center</button>
+                <button type="button" class="pin-btn" data-lat="12.9850" data-lon="77.6050" data-name="East Metro">📍 East Metro</button>
+                <button type="button" class="pin-btn" data-lat="12.9650" data-lon="77.5850" data-name="Downtown Square">📍 Downtown</button>
+                <button type="button" class="pin-btn" data-lat="12.9900" data-lon="77.5700" data-name="North Highway">📍 Expressway</button>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="reporterName">Your Name (Optional)</label>
+                <input type="text" id="reporterName" name="reporter_name" placeholder="Anonymous or Full Name">
+              </div>
+              <div class="form-group">
+                <label for="reporterContact">Phone / Radio Call (Optional)</label>
+                <input type="text" id="reporterContact" name="reporter_contact" placeholder="+1-555-0100">
+              </div>
+            </div>
+
+            <button type="submit" id="btnSubmitReport" class="btn btn-primary btn-submit">
+              <span class="btn-spinner" aria-hidden="true"></span>
+              <span class="btn-text">Transmit Emergency Report</span>
+            </button>
+          </form>
+        </article>
+
+        <!-- Citizen Live Tracking & Confirmation -->
+        <article id="citizenTicketCard" class="glass-card tracking-card">
+          <div class="card-header">
+            <h2>Active Ticket Status</h2>
+            <span id="ticketLiveTag" class="status-badge status-reported">Awaiting Submission</span>
+          </div>
+
+          <div id="noTicketState" class="empty-state">
+            <div class="empty-icon">📡</div>
+            <h3>No Active Report Tracked</h3>
+            <p>Submit an emergency report on the left or select a quick scenario to view live AI triage and dispatch coordination.</p>
+          </div>
+
+          <div id="activeTicketDetails" class="ticket-body hidden">
+            <div class="ticket-meta-header">
+              <div>
+                <span class="field-label">INCIDENT IDENTIFIER</span>
+                <div id="ticketId" class="mono-id">INC-00000</div>
+              </div>
+              <div>
+                <span class="field-label">CURRENT STATUS</span>
+                <div id="ticketStatusPill" class="status-badge status-reported">Reported</div>
+              </div>
+            </div>
+
+            <!-- AI Assessment Breakdown Box -->
+            <div class="ai-triage-panel">
+              <div class="panel-top">
+                <div class="ai-badge">
+                  <span class="sparkle">✨</span> AI Triage Model v1.0
+                </div>
+                <div id="uncertaintyBadge" class="uncertainty-tag">Uncertainty: 20%</div>
+              </div>
+
+              <div class="triage-metrics">
+                <div class="metric-box">
+                  <span class="m-label">Suggested Category</span>
+                  <strong id="ticketCategory" class="m-value">Medical Emergency</strong>
+                </div>
+                <div class="metric-box">
+                  <span class="m-label">Calculated Urgency</span>
+                  <strong id="ticketUrgency" class="m-value text-critical">Critical</strong>
+                </div>
+                <div class="metric-box">
+                  <span class="m-label">Suggested Unit</span>
+                  <strong id="ticketUnitType" class="m-value">Ambulance</strong>
+                </div>
+              </div>
+
+              <div class="confidence-bar-wrap">
+                <div class="confidence-labels">
+                  <span>Model Confidence</span>
+                  <strong id="ticketConfidencePct">85%</strong>
+                </div>
+                <div class="progress-track">
+                  <div id="ticketConfidenceBar" class="progress-fill" style="width: 85%;"></div>
+                </div>
+              </div>
+
+              <div class="reasoning-box">
+                <span class="r-label">Triage Reasoning:</span>
+                <p id="ticketReasoning" class="r-text">Analyzing keywords...</p>
+              </div>
+            </div>
+
+            <!-- Assigned Unit Tracker -->
+            <div class="assignment-status-box">
+              <span class="section-label">Assigned Response Unit:</span>
+              <div id="assignedUnitInfo" class="unit-banner">
+                <span id="assignedUnitName" class="unit-name">Awaiting Dispatcher Assignment</span>
+                <span id="assignedUnitEta" class="unit-eta">ETA: Pending</span>
+              </div>
+            </div>
+
+            <!-- Live Lifecycle Timeline -->
+            <div class="timeline-section">
+              <span class="section-label">Incident Event History:</span>
+              <ul id="ticketEventsList" class="events-list">
+                <!-- Dynamically filled with timestamped events -->
+              </ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- VIEW 2: DISPATCHER COMMAND CENTER -->
+    <section id="viewDispatcher" class="role-view" aria-labelledby="headingDispatcher">
+      <!-- Mobile Subnav for Queue vs Dossier -->
+      <div class="mobile-subnav dispatcher-mobile-nav" role="tablist">
+        <button id="subtabQueue" class="subnav-btn active" type="button">📋 Incident Queue (<span id="queueSubBadge">0</span>)</button>
+        <button id="subtabDossier" class="subnav-btn" type="button">🔍 Incident Dossier</button>
+      </div>
+
+      <div class="dispatcher-grid">
+        <!-- Left: Incident Queue -->
+        <aside id="dispatcherQueuePane" class="glass-card queue-panel">
+          <div class="card-header">
+            <div>
+              <h2 id="headingDispatcher">Incident Queue</h2>
+              <span class="subtext">Prioritized by urgency & timestamp</span>
+            </div>
+            <button id="btnRefreshIncidents" class="icon-btn" title="Refresh Queue" aria-label="Refresh Queue">🔄</button>
+          </div>
+
+          <!-- Queue Filter Bar -->
+          <div class="filter-bar">
+            <select id="filterStatus" aria-label="Filter incidents by status">
+              <option value="">All Statuses</option>
+              <option value="reported">Reported</option>
+              <option value="under_review">Under Review</option>
+              <option value="assessed">Assessed</option>
+              <option value="dispatched">Dispatched</option>
+              <option value="en_route">En Route</option>
+              <option value="arrived">Arrived</option>
+              <option value="assistance_in_progress">In Progress</option>
+              <option value="resolved">Resolved</option>
+            </select>
+
+            <select id="filterUrgency" aria-label="Filter incidents by urgency">
+              <option value="">All Urgencies</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+          </div>
+
+          <div id="incidentQueueList" class="queue-list" role="list">
+            <!-- Rendered list of incident cards -->
+          </div>
+        </aside>
+
+        <!-- Right: Dossier & Resource Dispatch Workspace -->
+        <article id="dispatcherDossierPane" class="glass-card dossier-panel">
+          <div id="dossierPlaceholder" class="empty-state">
+            <div class="empty-icon">📋</div>
+            <h3>Select an Incident to Inspect</h3>
+            <p>Pick an incident from the queue to verify AI triage, inspect duplicate warnings, and approve unit dispatch.</p>
+          </div>
+
+          <div id="dossierContent" class="dossier-body hidden">
+            <!-- Dossier Header -->
+            <div class="dossier-header">
+              <div class="dossier-headline">
+                <button id="btnBackToQueue" class="btn btn-secondary btn-sm mobile-back-btn" title="Back to Queue">
+                  ← Queue
+                </button>
+                <span id="dossierUrgencyBadge" class="urgency-badge badge-critical">CRITICAL</span>
+                <span id="dossierStatusBadge" class="status-badge status-reported">Reported</span>
+                <span id="dossierId" class="mono-id">INC-1234</span>
+              </div>
+              <div class="dossier-actions">
+                <button id="btnReassessAI" class="btn btn-secondary btn-sm" title="Re-evaluate with AI classifier">
+                  🤖 Re-Assess AI
+                </button>
+                <div class="status-transition-dropdown">
+                  <label for="selectNextStatus" class="sr-only">Advance Status</label>
+                  <select id="selectNextStatus" aria-label="Advance Status">
+                    <option value="">Change Status...</option>
+                    <option value="under_review">Mark Under Review</option>
+                    <option value="assessed">Mark Assessed</option>
+                    <option value="dispatched">Dispatched</option>
+                    <option value="escalated">Escalate Call</option>
+                    <option value="resolved">Mark Resolved</option>
+                    <option value="closed">Close Incident</option>
+                    <option value="cancelled">Cancel Incident</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Duplicate Candidate Warning Banner -->
+            <div id="duplicateAlertBox" class="alert-box alert-duplicate hidden" role="alert">
+              <div class="alert-title">
+                <span>⚠️ Potential Duplicate Report Detected</span>
+              </div>
+              <p id="duplicateAlertDesc">
+                This report matches wording or coordinates of an earlier incident. Human verification required before dispatching duplicate units.
+              </p>
+              <div id="duplicateCandidatesList" class="candidates-list"></div>
+            </div>
+
+            <!-- Incident Narrative & Coordinates -->
+            <div class="dossier-section">
+              <h3>Incident Report Narrative</h3>
+              <p id="dossierDescription" class="narrative-text"></p>
+              <div class="dossier-tags">
+                <span class="tag">📍 Landmark: <strong id="dossierAddress">--</strong></span>
+                <span class="tag">🌐 Coordinates: <strong id="dossierCoords">--</strong></span>
+                <span class="tag">👤 Reporter: <strong id="dossierReporter">--</strong></span>
+                <span class="tag">⏰ Time: <strong id="dossierTimestamp">--</strong></span>
+              </div>
+            </div>
+
+            <!-- AI Decision Support Box -->
+            <div class="dossier-section ai-support-box">
+              <div class="section-header-row">
+                <h3>AI Decision Support & Uncertainty Analysis</h3>
+                <span class="human-oversight-pill">Human Approval Required</span>
+              </div>
+              <div class="ai-columns">
+                <div class="ai-col">
+                  <span class="col-label">Category Recommendation</span>
+                  <div id="dossierCategory" class="col-value">Medical Emergency</div>
+                </div>
+                <div class="ai-col">
+                  <span class="col-label">Assessed Urgency</span>
+                  <div id="dossierUrgency" class="col-value text-critical">Critical</div>
+                </div>
+                <div class="ai-col">
+                  <span class="col-label">Confidence vs Uncertainty</span>
+                  <div class="uncertainty-indicator">
+                    <span id="dossierConfidenceScore">85% Confident</span>
+                    <span id="dossierUncertaintyScore" class="uncertainty-tag">Uncertainty: 15%</span>
+                  </div>
+                </div>
+                <div class="ai-col">
+                  <span class="col-label">Recommended Unit</span>
+                  <div id="dossierRecommendedUnit" class="col-value">Ambulance</div>
+                </div>
+              </div>
+              <div class="ai-reasoning-callout">
+                <strong>Model Reasoning:</strong> <span id="dossierReasoningText">--</span>
+              </div>
+            </div>
+
+            <!-- Eligible Response Units for Dispatch -->
+            <div class="dossier-section">
+              <div class="section-header-row">
+                <h3>Eligible Response Units (Proximity Ranked)</h3>
+                <span class="subtext">Sorted by Haversine distance from incident</span>
+              </div>
+              <div id="unitsProximityList" class="units-grid">
+                <!-- Dynamically filled with nearby units -->
+              </div>
+            </div>
+
+            <!-- Timeline of incident events -->
+            <div class="dossier-section">
+              <h3>Audit & Timeline Log</h3>
+              <ul id="dossierEventsList" class="events-list"></ul>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- VIEW 3: RESPONDER MDT TERMINAL -->
+    <section id="viewResponder" class="role-view" aria-labelledby="headingResponder">
+      <div class="responder-container">
+        <!-- Unit Selection Bar -->
+        <div class="glass-card responder-selector-card">
+          <div class="selector-content">
+            <label for="selectActiveUnit">
+              <strong>Select Response Unit:</strong>
+            </label>
+            <select id="selectActiveUnit" class="unit-dropdown" aria-label="Select Active Response Unit">
+              <!-- Units populated via JS -->
+            </select>
+            <div id="activeUnitStatusTag" class="status-badge status-available">Available</div>
+          </div>
+        </div>
+
+        <div class="responder-layout">
+          <!-- Active Mission Card -->
+          <article class="glass-card mission-card">
+            <div class="card-header">
+              <h2>Assigned Mission Dossier</h2>
+              <span id="missionUrgencyTag" class="urgency-badge badge-high">URGENT</span>
+            </div>
+
+            <div id="noMissionBox" class="empty-state">
+              <div class="empty-icon">🛡️</div>
+              <h3>No Active Dispatch Mission</h3>
+              <p>This unit is currently in service and awaiting dispatcher allocation.</p>
+            </div>
+
+            <div id="activeMissionBox" class="mission-details hidden">
+              <div class="mission-header-info">
+                <div>
+                  <span class="field-label">TARGET INCIDENT</span>
+                  <div id="missionIncidentId" class="mono-id">INC-999</div>
+                </div>
+                <div>
+                  <span class="field-label">INCIDENT STATUS</span>
+                  <div id="missionIncidentStatus" class="status-badge status-dispatched">Dispatched</div>
+                </div>
+              </div>
+
+              <div class="mission-summary">
+                <h3>Incident Description</h3>
+                <p id="missionDescription" class="narrative-text"></p>
+                <div class="mission-coords">
+                  <span>📍 Target Location: <strong id="missionLocation">--</strong></span>
+                </div>
+              </div>
+
+              <!-- Responder Operational Action Controls -->
+              <div class="responder-actions-panel">
+                <h3>Update Mission Progression:</h3>
+                <div class="action-buttons-stepper">
+                  <button id="btnMarkEnRoute" class="btn btn-action">
+                    🚗 1. Mark En Route
+                  </button>
+                  <button id="btnMarkArrived" class="btn btn-action">
+                    🏁 2. Mark On Scene / Arrived
+                  </button>
+                  <button id="btnMarkInProgress" class="btn btn-action">
+                    🩺 3. Assistance In Progress
+                  </button>
+                  <button id="btnMarkResolved" class="btn btn-success">
+                    ✅ 4. Mission Complete & Resolved
+                  </button>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <!-- Simulated Telemetry & GPS Controller -->
+          <article class="glass-card telemetry-card">
+            <div class="card-header">
+              <h2>Unit GPS Telemetry Simulator</h2>
+              <span class="info-pill">Simulated Feed</span>
+            </div>
+            <p class="subtext">Simulate vehicle movement, speed telemetry, and radio coordinate pings broadcasted over WebSocket.</p>
+
+            <div class="telemetry-readout">
+              <div class="telemetry-item">
+                <span class="t-label">Current Latitude</span>
+                <strong id="telemetryLat" class="t-value">12.9716</strong>
+              </div>
+              <div class="telemetry-item">
+                <span class="t-label">Current Longitude</span>
+                <strong id="telemetryLon" class="t-value">77.5946</strong>
+              </div>
+              <div class="telemetry-item">
+                <span class="t-label">Speed</span>
+                <strong id="telemetrySpeed" class="t-value">45 km/h</strong>
+              </div>
+            </div>
+
+            <div class="telemetry-controls">
+              <button id="btnSimulateDrive" class="btn btn-secondary">
+                📍 Drive Step Towards Target
+              </button>
+              <button id="btnSimulateHome" class="btn btn-secondary">
+                🏢 Return to Base Station
+              </button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 4: TACTICAL RADAR & AUDIT LOG -->
+    <section id="viewRadar" class="role-view" aria-labelledby="headingRadar">
+      <div class="radar-audit-grid">
+        <!-- 2D Tactical Radar Map -->
+        <article class="glass-card radar-card">
+          <div class="card-header">
+            <div>
+              <h2 id="headingRadar">Tactical Incident Radar</h2>
+              <span class="subtext">Real-time geospatial layout of incidents and units</span>
+            </div>
+            <div class="map-legend">
+              <span class="legend-item"><span class="legend-dot dot-incident"></span> Incidents</span>
+              <span class="legend-item"><span class="legend-dot dot-unit"></span> Response Units</span>
+            </div>
+          </div>
+
+          <div class="radar-canvas-container">
+            <!-- Simulated Tactical Grid Map with SVG -->
+            <svg id="tacticalRadarSvg" class="radar-svg" viewBox="0 0 600 400" preserveAspectRatio="xMidYMid meet" aria-label="Tactical map display">
+              <defs>
+                <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                  <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1"/>
+                </pattern>
+                <radialGradient id="radarSweep" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="rgba(14, 165, 233, 0.15)"/>
+                  <stop offset="100%" stop-color="rgba(14, 165, 233, 0)"/>
+                </radialGradient>
+              </defs>
+              <rect width="600" height="400" fill="#0d1424"/>
+              <rect width="600" height="400" fill="url(#grid)"/>
+              <circle cx="300" cy="200" r="180" fill="none" stroke="rgba(14, 165, 233, 0.15)" stroke-width="1"/>
+              <circle cx="300" cy="200" r="120" fill="none" stroke="rgba(14, 165, 233, 0.2)" stroke-width="1"/>
+              <circle cx="300" cy="200" r="60" fill="none" stroke="rgba(14, 165, 233, 0.25)" stroke-width="1"/>
+              <line x1="300" y1="20" x2="300" y2="380" stroke="rgba(14, 165, 233, 0.1)" stroke-width="1"/>
+              <line x1="20" y1="200" x2="580" y2="200" stroke="rgba(14, 165, 233, 0.1)" stroke-width="1"/>
+
+              <!-- Dynamic Markers Group -->
+              <g id="radarIncidentsGroup"></g>
+              <g id="radarUnitsGroup"></g>
+            </svg>
+            <div id="radarTooltip" class="radar-tooltip hidden"></div>
+          </div>
+        </article>
+
+        <!-- Live Event Stream & Audit Log -->
+        <article class="glass-card audit-card">
+          <div class="card-header">
+            <div>
+              <h2>System Audit & Event Stream</h2>
+              <span class="subtext">Immutable log of state changes & decisions</span>
+            </div>
+            <button id="btnClearAudit" class="icon-btn" title="Clear View" aria-label="Clear View">🗑️</button>
+          </div>
+          <div id="auditStreamContainer" class="audit-stream">
+            <!-- Dynamically populated with real-time audit event rows -->
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Modern Modal Dialog for Dispatch Confirmation (uses closedby="any" with fallback) -->
+  <dialog id="dispatchModal" closedby="any" aria-labelledby="dispatchModalTitle" class="glass-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3 id="dispatchModalTitle">Authorize Unit Dispatch</h3>
+        <button id="btnCloseModal" type="button" class="close-x" aria-label="Close dialog">&times;</button>
+      </div>
+      <form id="dispatchForm" method="dialog">
+        <div class="dispatch-summary-box">
+          <p>You are authorizing the immediate dispatch of:</p>
+          <div class="highlight-unit">
+            <strong id="modalUnitName">Medic 101</strong>
+            <span id="modalUnitEta">ETA ~ 4 mins</span>
+          </div>
+          <p>To Incident <strong id="modalIncidentId" class="mono-id">INC-1234</strong> (<span id="modalIncidentCategory">Fire</span>)</p>
+        </div>
+
+        <div class="form-group">
+          <label for="dispatcherIdInput">Dispatcher ID <span class="required">*</span></label>
+          <input type="text" id="dispatcherIdInput" value="DISP-COMMANDER-01" required>
+        </div>
+
+        <div class="form-group">
+          <label for="dispatcherNotes">Operational Notes / Route Orders</label>
+          <textarea id="dispatcherNotes" rows="2" placeholder="e.g. Approach with caution, deploy tender at north hydrant"></textarea>
+        </div>
+
+        <div class="dialog-buttons">
+          <button type="button" id="btnCancelDispatch" class="btn btn-secondary">Cancel</button>
+          <button type="submit" id="btnConfirmDispatch" class="btn btn-primary">Approve & Authorize Dispatch</button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <!-- Notification Toast Container -->
+  <div id="toastContainer" class="toast-container" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
