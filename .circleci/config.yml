@@ -1,0 +1,20 @@
+version: 2.1
+
+jobs:
+  build:
+    docker:
+      - image: cimg/python:3.12
+    steps:
+      - checkout
+      - run: python --version
+      - run:
+          name: Verify project files
+          command: |
+            test -d backend
+            test -d client
+            echo "Project files verified"
+
+workflows:
+  build-and-test:
+    jobs:
+      - build
